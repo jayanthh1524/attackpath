@@ -1,6 +1,7 @@
+from db import connect
 from falkordb import FalkorDB
 
-db = FalkorDB(host='localhost', port=6379)
+db = connect()
 
 # start fresh every time we run this file
 try:

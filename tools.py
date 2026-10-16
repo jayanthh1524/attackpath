@@ -1,8 +1,9 @@
+from db import connect
 from falkordb import FalkorDB
 
 
 def get_graph():
-    db = FalkorDB(host='localhost', port=6379)
+    db = connect()
     return db.select_graph('attackpath')
 
 
