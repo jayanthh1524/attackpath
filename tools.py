@@ -1,10 +1,27 @@
 from db import connect
+import contextvars
+
+_GRAPH = contextvars.ContextVar('graph_name', default='attackpath')
+_TARGET = contextvars.ContextVar('target_name', default='Database')
+
+
+def use_graph(name):
+    _GRAPH.set(name)
+
+
+def use_target(name):
+    _TARGET.set(name)
+
+
+def current_target():
+    return _TARGET.get()
+
 from falkordb import FalkorDB
 
 
 def get_graph():
     db = connect()
-    return db.select_graph('attackpath')
+    return db.select_graph(_GRAPH.get())
 
 
 def open_vulns(g):
@@ -18,7 +35,7 @@ def open_vulns(g):
 def all_routes(g, target):
     # every possible path from the Internet to the target
     res = g.query("""MATCH p = (:Internet)-[:EXPOSES|CONNECTS_TO*1..6]->(t:Asset {name:$target})
-                     RETURN [n IN nodes(p) | n.name] AS route""",
+                     RETURN [n IN nodes(p) | n.name] AS route LIMIT 500""",
                   params={'target': target})
     return [row[0] for row in res.result_set]
 

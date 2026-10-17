@@ -45,6 +45,19 @@ TOOL_FUNCS = {'find_routes': t_find_routes,
 
 
 # ---- the menu we show the AI: each tool's name and what it does ----
+from tools import current_target
+
+
+def _with_target(fn):
+    def inner(**kw):
+        kw['target'] = current_target()
+        return fn(**kw)
+    return inner
+
+
+TOOL_FUNCS = {k: _with_target(v) for k, v in TOOL_FUNCS.items()}
+
+
 def schema(name, desc, props, required):
     return {"type": "function", "function": {
         "name": name, "description": desc,
