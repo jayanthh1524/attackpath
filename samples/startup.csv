@@ -1,0 +1,23 @@
+kind,name,target,id,severity,fix
+exposed,Email Inbox,,,,
+exposed,Vercel Site,,,,
+exposed,Domain Registrar,,,,
+connection,Email Inbox,Laptop,,,
+connection,Laptop,GitHub Account,,,
+connection,Laptop,API Keys File,,,
+connection,Laptop,Backup Drive,,,
+connection,GitHub Account,Vercel Site,,,
+connection,Domain Registrar,Vercel Site,,,
+connection,Vercel Site,Cloud Database,,,
+connection,API Keys File,Cloud Database,,,
+connection,Cloud Database,Customer Data,,,
+connection,Backup Drive,Customer Data,,,
+weakness,Email Inbox,,VULN-101,medium,Enable email MFA
+weakness,Laptop,,VULN-102,high,Install OS updates
+weakness,GitHub Account,,VULN-103,high,Enable GitHub 2FA
+weakness,API Keys File,,VULN-104,critical,Move keys to a secrets manager
+weakness,Vercel Site,,VULN-105,medium,Update site dependencies
+weakness,Domain Registrar,,VULN-106,low,Use a password manager
+weakness,Backup Drive,,VULN-107,medium,Encrypt the backup drive
+weakness,Cloud Database,,VULN-108,high,Restrict database access
+weakness,Old Test Server,,VULN-109,low,Delete the old test server

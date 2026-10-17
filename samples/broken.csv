@@ -1,0 +1,5 @@
+kind,name,target,id,severity,fix
+connection,Web,App,,,
+weakness,Web,,V-1,high,Patch web
+weakness,App,,V-1,high,Patch app
+hacker,Web,,,,

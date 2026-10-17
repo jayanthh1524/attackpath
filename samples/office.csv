@@ -1,0 +1,22 @@
+kind,name,target,id,severity,fix
+exposed,Public Website,,,,
+exposed,Guest Wi-Fi,,,,
+exposed,Remote Desktop,,,,
+connection,Public Website,Web Backend,,,
+connection,Web Backend,Customer Database,,,
+connection,Guest Wi-Fi,Reception PC,,,
+connection,Reception PC,File Share,,,
+connection,File Share,Backup NAS,,,
+connection,Backup NAS,Customer Database,,,
+connection,Remote Desktop,Admin PC,,,
+connection,Admin PC,Customer Database,,,
+connection,Admin PC,Payroll System,,,
+weakness,Public Website,,V-201,high,Update CMS plugins
+weakness,Web Backend,,V-202,critical,Patch backend framework
+weakness,Guest Wi-Fi,,V-203,medium,Separate guest Wi-Fi
+weakness,Reception PC,,V-204,medium,Install Windows updates
+weakness,File Share,,V-205,high,Restrict file share access
+weakness,Remote Desktop,,V-206,critical,Disable open remote desktop
+weakness,Admin PC,,V-207,high,Enforce admin MFA
+weakness,Backup NAS,,V-208,medium,Change default NAS password
+weakness,Printer,,V-209,low,Update printer firmware
