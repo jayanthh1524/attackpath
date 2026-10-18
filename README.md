@@ -42,7 +42,7 @@ Applying a fix and recording the decision:
 algorithms.py also provides PageRank through FalkorDB (CALL algo.pageRank) to rank the most important targets.
 
 ## Files
-build_graph.py (creates the simulated network for local use), tools.py (route queries), analysis.py (in-memory route and fix-plan analysis), actions.py (apply fix, reset), algorithms.py (PageRank, route chokepoints), agent.py (Nemotron tool-calling loop), loader.py (builds a graph from the demo or an uploaded CSV), app.py (Streamlit page with two tabs), db.py (database connection), samples/ (example networks).
+build_graph.py (creates the simulated network for local use), tools.py (route queries), analysis.py (in-memory route and fix-plan analysis), actions.py (apply fix, reset), algorithms.py (PageRank, route chokepoints), agent.py (Nemotron tool-calling loop), loader.py (builds a graph from the demo or an uploaded CSV), app.py (Streamlit page with two tabs), db.py (database connection), samples/ (example networks), mcp_server.py and mcp_agent.py (the analysis tools as an MCP server, and an agent that discovers them through MCP).
 
 ## Run it yourself
     git clone https://github.com/jayanthh1524/attackpath
@@ -65,10 +65,18 @@ For a local database run FalkorDB in Docker (docker run -p 6379:6379 falkordb/fa
 ## Try it on your own network
 Open the Analyze your own network tab, download the CSV template or a sample (samples/startup.csv, samples/office.csv), edit it, upload it, choose the valuable systems to protect (for example customer data, not the entry points), run the agent and download the report. Columns: kind,name,target,id,severity,fix, where kind is exposed, connection or weakness. Limits: 25 computers, 60 connections, routes searched up to 6 hops, 6 agent runs per session and 40 per hour for everyone. Uploaded data is analyzed in a private temporary graph. Do not upload sensitive data to the public demo.
 
+## Tool selection through MCP
+The same analysis is also published as an MCP server (mcp_server.py) with three tools: list_sample_networks, investigate_network and remediate_network. mcp_agent.py is an agent that connects to that server, discovers the tools through the MCP protocol, lets NVIDIA Nemotron choose which ones to call, and writes the report. Run it locally with:
+
+    pip install "mcp<2"
+    python3 mcp_agent.py
+
+The web app calls the same analysis code directly. The MCP server works on temporary graphs that it deletes after each call.
+
 ## Notes
 - The network in the demo is simulated. The agent recommends and simulates fixes; it never changes real systems.
 - Do not upload sensitive company data to the public demo.
 - AI tools (including an AI assistant) helped write parts of the code. The idea, the design decisions, the testing and the deployment are mine, and I can explain every file.
 
 ## Roadmap
-Tool selection through an MCP server, and weighing fixes by effort and downtime.
+Weighing fixes by effort and downtime, using PageRank in the fix ranking, and scanning your own machine's inventory.
