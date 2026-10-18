@@ -16,12 +16,10 @@ Nodes: Internet, Asset (name, type, criticality), Vulnerability (id, severity, f
 Relationships: Internet EXPOSES Asset; Asset CONNECTS_TO Asset; Asset HAS_VULN Vulnerability; Fix REMEDIATES Vulnerability; Decision APPLIED Fix.
 
 ## How the agent works
-1. find_routes lists every open attack route to the target.
-2. find_chokepoints counts how many open routes pass through each computer.
-3. compare_fixes simulates every fix and counts the routes it closes.
-4. apply_fix marks the weakness as fixed and saves a Decision node with the reason in the graph.
-5. find_routes runs again to verify, and Nemotron writes the report.
-Nemotron picks the tools through function calling. The graph supplies all facts, so the model cannot invent routes or fixes: the tools only return what is in the graph.
+1. investigate: finds every open attack route to the systems you want to protect, counts how many routes pass through each computer (the chokepoints) and compares every available fix in memory, from one set of graph queries.
+2. remediate: builds a fix plan with a greedy algorithm (apply the fix that closes the most routes, recount, repeat until no route is left, optionally fixing every weakness) and writes each applied fix and its reason into the graph as a Decision node.
+3. Nemotron writes the report. NVIDIA Nemotron chooses which tool to call through function calling and explains the result. The graph supplies every fact, so the model cannot invent routes or fixes.
+Each visitor gets a private temporary graph, so uploads never collide.
 
 ## Key graph queries
 Routes from the Internet to a target:
@@ -44,7 +42,7 @@ Applying a fix and recording the decision:
 algorithms.py also provides PageRank through FalkorDB (CALL algo.pageRank) to rank the most important targets.
 
 ## Files
-build_graph.py (creates the simulated network), tools.py (routes, fix simulation), actions.py (apply fix, reset), algorithms.py (PageRank, route chokepoints), agent.py (Nemotron tool-calling loop), app.py (Streamlit page), db.py (database connection from environment settings).
+build_graph.py (creates the simulated network for local use), tools.py (route queries), analysis.py (in-memory route and fix-plan analysis), actions.py (apply fix, reset), algorithms.py (PageRank, route chokepoints), agent.py (Nemotron tool-calling loop), loader.py (builds a graph from the demo or an uploaded CSV), app.py (Streamlit page with two tabs), db.py (database connection), samples/ (example networks).
 
 ## Run it yourself
     git clone https://github.com/jayanthh1524/attackpath
@@ -64,10 +62,13 @@ For a local database run FalkorDB in Docker (docker run -p 6379:6379 falkordb/fa
     python3 build_graph.py
     streamlit run app.py
 
+## Try it on your own network
+Open the Analyze your own network tab, download the CSV template or a sample (samples/startup.csv, samples/office.csv), edit it, upload it, choose the valuable systems to protect (for example customer data, not the entry points), run the agent and download the report. Columns: kind,name,target,id,severity,fix, where kind is exposed, connection or weakness. Limits: 25 computers, 60 connections, routes searched up to 6 hops, 6 agent runs per session and 40 per hour for everyone. Uploaded data is analyzed in a private temporary graph. Do not upload sensitive data to the public demo.
+
 ## Notes
 - The network in the demo is simulated. The agent recommends and simulates fixes; it never changes real systems.
 - Do not upload sensitive company data to the public demo.
 - AI tools (including an AI assistant) helped write parts of the code. The idea, the design decisions, the testing and the deployment are mine, and I can explain every file.
 
 ## Roadmap
-Tool selection through an MCP server, importing your own network from a CSV file, and weighing fixes by effort and downtime.
+Tool selection through an MCP server, and weighing fixes by effort and downtime.
