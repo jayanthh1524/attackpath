@@ -1,4 +1,4 @@
-# AttackPath: a graph-powered security triage agent
+# Stratum: a graph-powered security triage agent
 
 Track: Agents That Act on Connected Data (Graph Hacks: Context for AI Agents)
 
@@ -6,7 +6,7 @@ Live demo: graph-agent.streamlit.app
 Demo video: VIDEOLINK
 
 ## What it does
-AttackPath finds every route an attacker could use to reach a company's most important system, picks the single fix that closes the most routes, applies it, and proves the result by searching again. FalkorDB holds the network as a graph and answers every question about it. NVIDIA Nemotron ULTRA 3 decides which tool to use next and writes the report. The demo network is simulated.
+Stratum finds every route an attacker could use to reach a company's most important system, picks the single fix that closes the most routes, applies it, and proves the result by searching again. FalkorDB holds the network as a graph and answers every question about it. NVIDIA Nemotron ULTRA 3 decides which tool to use next and writes the report. The demo network is simulated.
 
 ## Why a graph
 Attack routes are multi-hop paths through connected computers, accounts and weaknesses. A graph query follows those connections directly, and the agent can explain every decision with the exact route behind it.

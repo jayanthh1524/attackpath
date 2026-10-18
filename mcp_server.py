@@ -8,7 +8,7 @@ from db import connect
 from loader import DEMO, load_network, parse_csv
 from tools import use_graph
 
-mcp = FastMCP("attackpath")
+mcp = FastMCP("stratum")
 
 
 def _load(network, targets):

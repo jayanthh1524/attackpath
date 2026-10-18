@@ -62,7 +62,7 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {}}}},
 ]
 
-SYSTEM = """You are AttackPath, a security triage agent.
+SYSTEM = """You are Stratum, a security triage agent.
 1. Call investigate to see the open attack routes, the chokepoints and the fix comparison.
 2. Call remediate to apply the best fix plan.
 3. Write a short report in plain English: routes before, the fixes applied in order and why (name the routes each closes), routes after, any remaining risk, and one next step.

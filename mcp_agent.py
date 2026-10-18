@@ -12,7 +12,7 @@ load_dotenv()
 client = OpenAI(base_url="https://integrate.api.nvidia.com/v1",
                 api_key=os.environ["NVIDIA_API_KEY"], timeout=120)
 MODEL = "nvidia/nemotron-3-super-120b-a12b"
-SYSTEM = ("You are AttackPath, a security triage agent. Use the tools: "
+SYSTEM = ("You are Stratum, a security triage agent. Use the tools: "
           "investigate_network first, then remediate_network, then write a "
           "short plain-English report with the routes before and after, the "
           "fixes in order and why. Use only names and numbers the tools return.")
