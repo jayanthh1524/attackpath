@@ -7,31 +7,26 @@ import streamlit as st
 
 from actions import reset_demo
 from agent import run_agent
+from analysis import fix_table, open_routes, snapshot, use_settings
 from loader import DEMO, allow_run, load_network, parse_csv, to_csv
-from tools import (find_attack_paths, get_graph, list_fixes, open_vulns,
-                   simulate_fix, use_graph, use_target)
+from tools import get_graph, use_graph
 
 st.set_page_config(page_title="AttackPath", layout="wide")
+ss = st.session_state
 
 
-def graph_dot(routes, target):
-    g = get_graph()
-    hot = set()
-    for r in routes:
-        for a, b in zip(r, r[1:]):
-            hot.add((a, b))
-    weak = {a for a, _ in open_vulns(g)}
+def graph_dot(net, routes, targets, weak):
+    # drawn from the network data itself, so it needs no database queries
+    hot = {(a, b) for r in routes for a, b in zip(r, r[1:])}
     lines = ['digraph G {', 'rankdir=LR;',
              'node [shape=box, style="rounded,filled", '
              'fillcolor="#eeeeee", fontname="Helvetica"];',
              '"Internet" [fillcolor="#ffcdd2"];']
-    for (name,) in g.query("MATCH (a:Asset) RETURN a.name").result_set:
-        color = ("#c8e6c9" if name == target
+    for name in net["assets"]:
+        color = ("#c8e6c9" if name in targets
                  else "#ffe0b2" if name in weak else "#eeeeee")
         lines.append(f'"{name}" [fillcolor="{color}"];')
-    edges = g.query("MATCH (a)-[:EXPOSES|CONNECTS_TO]->(b) "
-                    "RETURN a.name, b.name").result_set
-    for a, b in edges:
+    for a, b in [("Internet", x) for x in net["exposed"]] + list(net["links"]):
         style = ('color="red", penwidth=2.5' if (a, b) in hot
                  else 'color="#999999"')
         lines.append(f'"{a}" -> "{b}" [{style}];')
@@ -39,44 +34,43 @@ def graph_dot(routes, target):
     return "\n".join(lines)
 
 
-def current_view(target):
-    routes = find_attack_paths(target)
-    return routes, graph_dot(routes, target)
+def view(net, targets):
+    ck = (ss["loaded"], tuple(targets))
+    cache = ss.get("rroutes") if ss.get("rck") == ck else None
+    snap = snapshot(targets, cache)
+    ss["rroutes"], ss["rck"] = snap["routes"], ck
+    routes = open_routes(snap)
+    weak = set(snap["vulns"].values())
+    return snap, routes, graph_dot(net, routes, targets, weak)
 
 
-def fix_table(target):
-    rows = []
-    for fix in list_fixes():
-        before, after = simulate_fix(fix, target)
-        rows.append((fix, len(before) - len(after), len(after)))
-    return sorted(rows, key=lambda r: -r[1])
-
-
-def latest_decision():
+def decisions():
     res = get_graph().query(
         "MATCH (d:Decision)-[:APPLIED]->(f:Fix) "
-        "RETURN f.action, d.reason ORDER BY d.time DESC LIMIT 1").result_set
-    return res[0] if res else None
+        "RETURN f.action, d.reason ORDER BY d.time").result_set
+    seen, out = set(), []
+    for a, r in res:
+        if (a, r) not in seen:
+            seen.add((a, r))
+            out.append((a, r))
+    return out
 
 
-def build_report(label, target, before, after, table, decision, agent_text):
+def build_report(label, targets, before, after, table, applied, text):
     L = ["# AttackPath security triage report", "",
          f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-         f"Network: {label}", f"System protected: {target}", "",
+         f"Network: {label}", f"Systems protected: {', '.join(targets)}", "",
          f"## Open attack routes before ({len(before)})"]
     L += [f"- {' -> '.join(r)}" for r in before] or ["- none"]
-    L += ["", "## Fix comparison (simulated on the graph)", "",
+    L += ["", "## Fix comparison at the start (simulated on the graph)", "",
           "| Fix | Routes closed | Routes left |", "|---|---|---|"]
     L += [f"| {f} | {c} | {left} |" for f, c, left in table]
-    L += ["", "## Fix applied"]
-    if decision:
-        L += [f"- Fix: {decision[0]}", f"- Reason recorded in the graph: {decision[1]}"]
-    else:
-        L += ["- No fix was applied."]
+    L += ["", "## Fixes applied, in order"]
+    L += [f"{i}. {a}: {r}" for i, (a, r) in enumerate(applied, 1)] or ["- none"]
     L += ["", f"## Open attack routes after ({len(after)})"]
     L += [f"- {' -> '.join(r)}" for r in after] or ["- none"]
-    L += ["", "## Agent report", "", agent_text, "",
-          "---", "Routes and fix results come from graph queries on the data "
+    L += ["", "## Agent report", "", text, "", "---",
+          "Routes and fix results come from graph queries on the data "
           "provided. Fixes are simulated recommendations; no real system was "
           "changed."]
     return "\n".join(L)
@@ -95,7 +89,6 @@ class LiveLog:
         pass
 
 
-ss = st.session_state
 if "gid" not in ss:
     ss["gid"] = "s_" + uuid.uuid4().hex[:8]  # a private graph per visitor
     ss["loaded"], ss["runs"] = None, 0
@@ -103,17 +96,17 @@ use_graph(ss["gid"])
 
 st.title("AttackPath: a graph-powered security triage agent")
 st.caption("FalkorDB finds the attack routes. NVIDIA Nemotron chooses the "
-           "tools, picks the fix and explains it.")
+           "tools, applies the fix plan and explains it.")
 
 with st.expander("Judge quick start (2 minutes)", expanded=True):
     st.markdown(
-        "1. Use the **built-in demo** (simulated), or choose **Upload your own "
-        "network** and download the CSV template to see the format.\n"
-        "2. **Red lines** are routes an attacker can use to reach the system "
-        "you protect.\n"
-        "3. Click **Run the agent**. It investigates, compares every fix, "
-        "applies the best one and re-checks.\n"
-        "4. Read the before/after graphs, then **download the report**.")
+        "1. Use the **built-in demo** (simulated), or **upload your own "
+        "network** (download the CSV template to see the format).\n"
+        "2. Pick the **systems to protect**. **Red lines** are routes an "
+        "attacker can use to reach them.\n"
+        "3. Click **Run the agent**. It investigates, then applies a full fix "
+        "plan until no route is left.\n"
+        "4. Read the before/after graphs and **download the report**.")
 
 mode = st.radio("Network to analyze",
                 ["Built-in demo (simulated)", "Upload your own network (CSV)"],
@@ -146,27 +139,37 @@ if ss["loaded"] != key:
     ss["loaded"] = key
     ss.pop("result", None)
 
-assets = sorted(net["assets"])
-default = assets.index("Database") if "Database" in assets else 0
-target = st.selectbox("System to protect", assets, index=default)
-use_target(target)
-
+assets = list(net["assets"])
+if key == "demo":
+    default = ["Database"]
+else:
+    has_out = {a for a, _ in net["links"]}
+    default = ([a for a in assets if a not in has_out
+                and a not in net["exposed"]] or assets[:1])
+targets = st.multiselect("Systems to protect", assets, default=default,
+                         key=f"tg_{key}")
+if not targets:
+    st.warning("Pick at least one system to protect.")
+    st.stop()
+fix_all = st.checkbox("Also fix every weakness, not only those on attack routes")
 reset_first = st.checkbox("Reset to the starting state before running",
                           value=True)
+use_settings(targets, fix_all)
 if st.button("Reset now"):
     reset_demo()
     ss.pop("result", None)
 
-routes, dot = current_view(target)
+snap, routes, dot = view(net, targets)
 st.subheader("Network now")
-st.metric(f"Open attack routes to {target}", len(routes))
+st.metric("Open attack routes to the protected systems", len(routes))
 st.graphviz_chart(dot)
 
 st.divider()
+names = ", ".join(targets)
 incident = st.text_area(
     "Incident",
     f"A critical vulnerability was just reported. Investigate the risk to "
-    f"{target} and fix what you can.", key=f"inc_{target}")
+    f"{names} and fix what you can.", key=f"inc_{key}_{names}")
 
 if st.button("Run the agent", type="primary"):
     if ss["runs"] >= 6:
@@ -177,23 +180,24 @@ if st.button("Run the agent", type="primary"):
         ss["runs"] += 1
         if reset_first:
             reset_demo()
-        before, before_dot = current_view(target)
-        table = fix_table(target)
-        st.write("Agent working... this can take 1-3 minutes.")
+        snap0, before, _ = view(net, targets)
+        table = fix_table(snap0)
+        st.write("Agent working...")
         log = LiveLog(st.empty())
         with contextlib.redirect_stdout(log):
             try:
-                report = run_agent(f"{incident} The system to protect is "
-                                   f"'{target}'.")
+                report = run_agent(f"{incident} Systems to protect: {names}.")
             except Exception as e:
                 report = f"The AI call failed: {e}"
-        after, after_dot = current_view(target)
+        _, after, after_dot = view(net, targets)
+        _, _, before_dot = view(net, targets) if False else (None, None, None)
         ss["result"] = {
-            "before_n": len(before), "before_dot": before_dot,
-            "after_n": len(after), "after_dot": after_dot, "report": report,
-            "steps": log.text,
-            "md": build_report(label, target, before, after, table,
-                               latest_decision(), report)}
+            "before_n": len(before), "after_n": len(after),
+            "before_dot": graph_dot(net, before, targets,
+                                    set(snap0["vulns"].values())),
+            "after_dot": after_dot, "report": report, "steps": log.text,
+            "md": build_report(label, targets, before, after, table,
+                               decisions(), report)}
 
 res = ss.get("result")
 if res:
