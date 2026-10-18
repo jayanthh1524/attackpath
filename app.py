@@ -89,127 +89,160 @@ class LiveLog:
         pass
 
 
-if "gid" not in ss:
-    ss["gid"] = "s_" + uuid.uuid4().hex[:8]  # a private graph per visitor
-    ss["loaded"], ss["runs"] = None, 0
-use_graph(ss["gid"])
+def view(net, targets, kind):
+    ck = (ss[f"{kind}_loaded"], tuple(targets))
+    cache = ss.get(f"{kind}_rroutes") if ss.get(f"{kind}_rck") == ck else None
+    snap = snapshot(targets, cache)
+    ss[f"{kind}_rroutes"], ss[f"{kind}_rck"] = snap["routes"], ck
+    routes = open_routes(snap)
+    weak = set(snap["vulns"].values())
+    return snap, routes, graph_dot(net, routes, targets, weak)
 
-st.title("AttackPath: a graph-powered security triage agent")
-st.caption("FalkorDB finds the attack routes. NVIDIA Nemotron chooses the "
-           "tools, applies the fix plan and explains it.")
 
-with st.expander("Judge quick start (2 minutes)", expanded=True):
-    st.markdown(
-        "1. Use the **built-in demo** (simulated), or **upload your own "
-        "network** (download the CSV template to see the format).\n"
-        "2. Pick the **systems to protect**. **Red lines** are routes an "
-        "attacker can use to reach them.\n"
-        "3. Click **Run the agent**. It investigates, then applies a full fix "
-        "plan until no route is left.\n"
-        "4. Read the before/after graphs and **download the report**.")
+def read_sample(name):
+    try:
+        return open(f"samples/{name}.csv").read()
+    except OSError:
+        return None
 
-mode = st.radio("Network to analyze",
-                ["Built-in demo (simulated)", "Upload your own network (CSV)"],
-                horizontal=True)
-if mode.startswith("Built-in"):
-    net, label, key = DEMO, "Built-in demo network (simulated)", "demo"
-else:
+
+def get_network(kind):
+    # returns (network, label, key), or None when nothing is ready yet
+    if kind == "demo":
+        st.info("The story: a small company's network (simulated). Orange = a "
+                "computer with an open weakness, green = the system we "
+                "protect, red lines = routes an attacker can use. Click "
+                "**Run the agent** and watch it investigate, apply fixes "
+                "and prove the result.")
+        return DEMO, "Built-in demo network (simulated)", "demo"
     st.warning("Do not upload sensitive or confidential data to this public "
                "demo. Your network is analyzed in a private temporary graph.")
-    st.download_button("Download CSV template (the demo network)",
-                       to_csv(DEMO), "attackpath_template.csv", "text/csv")
+    c1, c2, c3 = st.columns(3)
+    c1.download_button("CSV template", to_csv(DEMO),
+                       "attackpath_template.csv", "text/csv", key="dl_t")
+    for col, name, nice in ((c2, "startup", "Sample: solo founder"),
+                            (c3, "office", "Sample: small office")):
+        data = read_sample(name)
+        if data:
+            col.download_button(nice, data, f"{name}.csv", "text/csv",
+                                key=f"dl_{name}")
     st.caption("kind = exposed (reachable from the Internet), connection "
                "(name -> target) or weakness (name, id, severity, fix). "
-               "Max 25 computers, 60 connections.")
-    up = st.file_uploader("Your network CSV", type=["csv"])
+               "Max 25 computers, 60 connections. Pick the valuable systems "
+               "(for example customer data), not the entry points.")
+    up = st.file_uploader("Your network CSV", type=["csv"], key="own_up")
     if up is None:
-        st.stop()
+        return None
     text = up.getvalue().decode("utf-8-sig", errors="replace")
     net, errors = parse_csv(text)
     if errors:
         for e in errors:
             st.error(e)
-        st.stop()
-    label = f"Uploaded network: {up.name}"
-    key = hashlib.md5(text.encode()).hexdigest()
+        return None
+    return (net, f"Uploaded network: {up.name}",
+            hashlib.md5(text.encode()).hexdigest())
 
-if ss["loaded"] != key:
-    with st.spinner("Loading the network into the graph..."):
-        load_network(ss["gid"], net)
-    ss["loaded"] = key
-    ss.pop("result", None)
 
-assets = list(net["assets"])
-if key == "demo":
-    default = ["Database"]
-else:
-    has_out = {a for a, _ in net["links"]}
-    default = ([a for a in assets if a not in has_out
-                and a not in net["exposed"]] or assets[:1])
-targets = st.multiselect("Systems to protect", assets, default=default,
-                         key=f"tg_{key}")
-if not targets:
-    st.warning("Pick at least one system to protect.")
-    st.stop()
-fix_all = st.checkbox("Also fix every weakness, not only those on attack routes")
-reset_first = st.checkbox("Reset to the starting state before running",
-                          value=True)
-use_settings(targets, fix_all)
-if st.button("Reset now"):
-    reset_demo()
-    ss.pop("result", None)
+def workspace(kind):
+    gk, lk, rk = f"{kind}_gid", f"{kind}_loaded", f"{kind}_result"
+    if gk not in ss:
+        ss[gk] = f"s_{kind[0]}{uuid.uuid4().hex[:8]}"  # private graph
+        ss[lk] = None
+    use_graph(ss[gk])
+    got = get_network(kind)
+    if got is None:
+        return
+    net, label, key = got
+    if ss[lk] != key:
+        with st.spinner("Loading the network into the graph..."):
+            load_network(ss[gk], net)
+        ss[lk] = key
+        ss.pop(rk, None)
 
-snap, routes, dot = view(net, targets)
-st.subheader("Network now")
-st.metric("Open attack routes to the protected systems", len(routes))
-st.graphviz_chart(dot)
-
-st.divider()
-names = ", ".join(targets)
-incident = st.text_area(
-    "Incident",
-    f"A critical vulnerability was just reported. Investigate the risk to "
-    f"{names} and fix what you can.", key=f"inc_{key}_{names}")
-
-if st.button("Run the agent", type="primary"):
-    if ss["runs"] >= 6:
-        st.warning("Run limit reached for this session.")
-    elif not allow_run():
-        st.warning("The demo is busy (hourly AI limit). Try again later.")
+    assets = list(net["assets"])
+    if kind == "demo":
+        default = ["Database"]
     else:
-        ss["runs"] += 1
-        if reset_first:
-            reset_demo()
-        snap0, before, _ = view(net, targets)
-        table = fix_table(snap0)
-        st.write("Agent working...")
-        log = LiveLog(st.empty())
-        with contextlib.redirect_stdout(log):
-            try:
-                report = run_agent(f"{incident} Systems to protect: {names}.")
-            except Exception as e:
-                report = f"The AI call failed: {e}"
-        _, after, after_dot = view(net, targets)
-        _, _, before_dot = view(net, targets) if False else (None, None, None)
-        ss["result"] = {
-            "before_n": len(before), "after_n": len(after),
-            "before_dot": graph_dot(net, before, targets,
-                                    set(snap0["vulns"].values())),
-            "after_dot": after_dot, "report": report, "steps": log.text,
-            "md": build_report(label, targets, before, after, table,
-                               decisions(), report)}
+        has_out = {a for a, _ in net["links"]}
+        default = ([a for a in assets if a not in has_out
+                    and a not in net["exposed"]] or assets[:1])
+    targets = st.multiselect("Systems to protect", assets, default=default,
+                             key=f"{kind}_tg_{key}")
+    if not targets:
+        st.warning("Pick at least one system to protect.")
+        return
+    fix_all = st.checkbox("Also fix every weakness, not only those on attack "
+                          "routes", key=f"{kind}_fa")
+    reset_first = st.checkbox("Reset to the starting state before running",
+                              value=True, key=f"{kind}_rf")
+    use_settings(targets, fix_all)
+    if st.button("Reset now", key=f"{kind}_reset"):
+        reset_demo()
+        ss.pop(rk, None)
 
-res = ss.get("result")
-if res:
-    st.subheader("Result")
-    c1, c2 = st.columns(2)
-    c1.metric("Open routes before", res["before_n"])
-    c1.graphviz_chart(res["before_dot"])
-    c2.metric("Open routes after", res["after_n"])
-    c2.graphviz_chart(res["after_dot"])
-    st.subheader("Agent report")
-    st.write(res["report"])
-    st.download_button("Download the full report (Markdown)", res["md"],
-                       "attackpath_report.md", "text/markdown")
-    with st.expander("Agent steps (tool calls)"):
-        st.code(res["steps"])
+    snap, routes, dot = view(net, targets, kind)
+    st.subheader("Network now")
+    st.metric("Open attack routes to the protected systems", len(routes))
+    st.graphviz_chart(dot)
+
+    st.divider()
+    names = ", ".join(targets)
+    incident = st.text_area(
+        "Incident",
+        f"A critical vulnerability was just reported. Investigate the risk to "
+        f"{names} and fix what you can.", key=f"{kind}_inc_{key}_{names}")
+
+    if st.button("Run the agent", type="primary", key=f"{kind}_run"):
+        if ss["runs"] >= 6:
+            st.warning("Run limit reached for this session.")
+        elif not allow_run():
+            st.warning("The demo is busy (hourly AI limit). Try again later.")
+        else:
+            ss["runs"] += 1
+            if reset_first:
+                reset_demo()
+            snap0, before, before_dot = view(net, targets, kind)
+            table = fix_table(snap0)
+            st.write("Agent working...")
+            log = LiveLog(st.empty())
+            with contextlib.redirect_stdout(log):
+                try:
+                    report = run_agent(f"{incident} Systems to protect: "
+                                       f"{names}.")
+                except Exception as e:
+                    report = f"The AI call failed: {e}"
+            _, after, after_dot = view(net, targets, kind)
+            ss[rk] = {
+                "before_n": len(before), "after_n": len(after),
+                "before_dot": before_dot, "after_dot": after_dot,
+                "report": report, "steps": log.text,
+                "md": build_report(label, targets, before, after, table,
+                                   decisions(), report)}
+
+    res = ss.get(rk)
+    if res:
+        st.subheader("Result")
+        c1, c2 = st.columns(2)
+        c1.metric("Open routes before", res["before_n"])
+        c1.graphviz_chart(res["before_dot"])
+        c2.metric("Open routes after", res["after_n"])
+        c2.graphviz_chart(res["after_dot"])
+        st.subheader("Agent report")
+        st.write(res["report"])
+        st.download_button("Download the full report (Markdown)", res["md"],
+                           "attackpath_report.md", "text/markdown",
+                           key=f"{kind}_dl")
+        with st.expander("Agent steps (tool calls)"):
+            st.code(res["steps"])
+
+
+ss.setdefault("runs", 0)
+st.title("AttackPath: a graph-powered security triage agent")
+st.caption("FalkorDB finds the attack routes. NVIDIA Nemotron chooses the "
+           "tools, applies the fix plan and explains it.")
+tab_demo, tab_own = st.tabs(["Guided demo (simulated)",
+                             "Analyze your own network"])
+with tab_demo:
+    workspace("demo")
+with tab_own:
+    workspace("own")
