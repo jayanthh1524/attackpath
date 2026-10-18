@@ -11,9 +11,28 @@ Stratum finds every route an attacker could use to reach a company's most import
 ## Why a graph
 Attack routes are multi-hop paths through connected computers, accounts and weaknesses. A graph query follows those connections directly, and the agent can explain every decision with the exact route behind it.
 
-## Graph model
-Nodes: Internet, Asset (name, type, criticality), Vulnerability (id, severity, fixed), Fix (action), Decision (reason, time).
-Relationships: Internet EXPOSES Asset; Asset CONNECTS_TO Asset; Asset HAS_VULN Vulnerability; Fix REMEDIATES Vulnerability; Decision APPLIED Fix.
+## Graph model overview
+
+```mermaid
+graph LR
+    I[Internet] -->|EXPOSES| A[Asset]
+    A -->|CONNECTS_TO| B[Asset]
+    A -->|HAS_VULN| V[Vulnerability]
+    X[Fix] -->|REMEDIATES| V
+    D[Decision] -->|APPLIED| X
+```
+
+| Node | Properties | Meaning |
+|---|---|---|
+| Internet | name | The outside world, the start of every attack route |
+| Asset | name | A computer, account or system |
+| Vulnerability | id, severity, fixed | A weakness on an asset |
+| Fix | action | An action that removes one or more weaknesses |
+| Decision | reason, time | A record of a fix the agent applied, and why |
+
+Relationships: EXPOSES (reachable from the Internet), CONNECTS_TO (one asset can reach another), HAS_VULN (an asset has a weakness), REMEDIATES (a fix removes a weakness), APPLIED (a decision records an applied fix).
+
+How the graph is used: a variable-length path query finds every route from the Internet to the systems being protected, up to 6 hops. A route is open only if every computer on it has an unfixed weakness. The agent compares every fix, applies the one that closes the most routes, recounts and repeats. Each applied fix is saved as a Decision node linked to the fix, so every action can be traced in the graph. Each visitor session gets its own private, temporary graph, so uploads never collide.
 
 ## How the agent works
 1. investigate: finds every open attack route to the systems you want to protect, counts how many routes pass through each computer (the chokepoints) and compares every available fix in memory, from one set of graph queries.
