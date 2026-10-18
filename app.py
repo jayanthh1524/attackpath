@@ -158,6 +158,13 @@ def get_network(kind):
                "(for example customer data), not the entry points.")
     up = st.file_uploader("Your network CSV", type=["csv"], key="own_up")
     if up is None:
+        st.markdown("#### Preview: how your network will be drawn")
+        st.caption("This is the template network. Upload your own CSV and it "
+                   "replaces this picture. Orange = a computer with an open "
+                   "weakness, green = a system you protect. Red lines (the "
+                   "attack routes) appear once your network is analyzed.")
+        st.graphviz_chart(graph_dot(
+            DEMO, [], ["Database"], {v[0] for v in DEMO["vulns"]}))
         return None
     text = up.getvalue().decode("utf-8-sig", errors="replace")
     net, errors = parse_csv(text)
@@ -329,6 +336,14 @@ st.markdown("""
 <span class="chip">FalkorDB graph</span><span class="chip">NVIDIA Nemotron agent</span><span class="chip">MCP server included</span><span class="chip">Track 1: agents that act on connected data</span>
 </div>
 """, unsafe_allow_html=True)
+SCHEMA_DOT = """digraph S { rankdir=LR; bgcolor="transparent";
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#eeeeee"];
+Internet [fillcolor="#ffcdd2"]; Asset [fillcolor="#ffe0b2"]; Vulnerability [fillcolor="#e1bee7"]; Fix [fillcolor="#c8e6c9"]; Decision [fillcolor="#bbdefb"];
+Internet -> Asset [label="EXPOSES"]; Asset -> Asset [label="CONNECTS_TO"]; Asset -> Vulnerability [label="HAS_VULN"]; Fix -> Vulnerability [label="REMEDIATES"]; Decision -> Fix [label="APPLIED"]; }"""
+with st.expander("Graph model: how the network is stored in FalkorDB"):
+    st.graphviz_chart(SCHEMA_DOT)
+    st.caption("A route from the Internet to a protected system is open only if every computer on it has an unfixed weakness. Each applied fix is saved as a Decision node, so every action is traceable.")
+
 tab_demo, tab_own = st.tabs(["Guided demo (simulated)",
                              "Analyze your own network"])
 with tab_demo:
