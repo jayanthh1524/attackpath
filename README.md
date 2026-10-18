@@ -3,7 +3,7 @@
 Track: Agents That Act on Connected Data (Graph Hacks: Context for AI Agents)
 
 Live demo: graph-agent.streamlit.app
-Demo video: VIDEOLINK
+Demo video: https://dev.to/jayanthh1524/stratum-ai-security-triage-agent-graph-based-3h5k
 
 ## What it does
 Stratum finds every route an attacker could use to reach a company's most important system, picks the single fix that closes the most routes, applies it, and proves the result by searching again. FalkorDB holds the network as a graph and answers every question about it. NVIDIA Nemotron ULTRA 3 decides which tool to use next and writes the report. The demo network is simulated.
